@@ -14,10 +14,10 @@ router.post('/', rota(async (req, res) => {
   const precoNum = Number(preco);
   const duracao = Number(duracaoMin);
 
-  if (!nomeLimpo || nomeLimpo.length > 100) throw new ErroHttp(400, 'Informe o nome do serviço (até 100 caracteres).');
-  if (!Number.isFinite(precoNum) || precoNum < 0) throw new ErroHttp(400, 'Informe um preço válido.');
+  if (!nomeLimpo || nomeLimpo.length > 100) throw new ErroHttp(400, 'Informe o nome do serviço (até 100 caracteres).', 'nome');
+  if (!Number.isFinite(precoNum) || precoNum < 0) throw new ErroHttp(400, 'Informe um preço válido.', 'preco');
   if (!Number.isInteger(duracao) || duracao < 5 || duracao > 480) {
-    throw new ErroHttp(400, 'A duração deve ser de 5 a 480 minutos.');
+    throw new ErroHttp(400, 'A duração deve ser de 5 a 480 minutos.', 'duracaoMin');
   }
 
   const { rows } = await db.query(

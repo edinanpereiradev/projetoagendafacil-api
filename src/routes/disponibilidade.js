@@ -23,16 +23,17 @@ router.get('/:idPrestador', rota(async (req, res) => {
 router.post('/', exigirTipo('prestador'), rota(async (req, res) => {
   const { diaSemana, horaInicio, horaFim } = req.body || {};
   const dia = Number(diaSemana);
-  if (!Number.isInteger(dia) || dia < 0 || dia > 6) throw new ErroHttp(400, 'Dia da semana inválido.');
-  if (!horaValida(horaInicio) || !horaValida(horaFim)) throw new ErroHttp(400, 'Informe horários no formato HH:MM.');
-  if (paraMin(horaInicio) >= paraMin(horaFim)) throw new ErroHttp(400, 'O início deve ser antes do fim.');
+  if (!Number.isInteger(dia) || dia < 0 || dia > 6) throw new ErroHttp(400, 'Dia da semana inválido.', 'diaSemana');
+  if (!horaValida(horaInicio)) throw new ErroHttp(400, 'Informe o início no formato HH:MM.', 'horaInicio');
+  if (!horaValida(horaFim)) throw new ErroHttp(400, 'Informe o fim no formato HH:MM.', 'horaFim');
+  if (paraMin(horaInicio) >= paraMin(horaFim)) throw new ErroHttp(400, 'O início deve ser antes do fim.', 'horaFim');
 
   const { rows: existentes } = await db.query(
     'SELECT hora_inicio, hora_fim FROM disponibilidades WHERE id_prestador = $1 AND dia_semana = $2',
     [req.usuario.id, dia]
   );
   const conflita = existentes.some((e) => paraMin(horaInicio) < paraMin(e.hora_fim) && paraMin(horaFim) > paraMin(e.hora_inicio));
-  if (conflita) throw new ErroHttp(409, 'Este horário se sobrepõe a outro já cadastrado neste dia.');
+  if (conflita) throw new ErroHttp(409, 'Este horário se sobrepõe a outro já cadastrado neste dia.', 'horaInicio');
 
   const { rows } = await db.query(
     `INSERT INTO disponibilidades (id_prestador, dia_semana, hora_inicio, hora_fim) VALUES ($1, $2, $3, $4)

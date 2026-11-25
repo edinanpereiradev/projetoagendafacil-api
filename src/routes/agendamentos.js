@@ -57,7 +57,7 @@ router.get('/horarios-disponiveis', rota(async (req, res) => {
   const idServico = inteiro(req.query.idServico);
   const { data } = req.query;
   if (!idPrestador || !idServico) throw new ErroHttp(400, 'Informe idPrestador e idServico.');
-  if (!dataValida(data)) throw new ErroHttp(400, 'Data inválida. Use o formato AAAA-MM-DD.');
+  if (!dataValida(data)) throw new ErroHttp(400, 'Data inválida. Use o formato AAAA-MM-DD.', 'data');
 
   const { rows } = await db.query(
     'SELECT duracao_min AS "duracaoMin" FROM servicos WHERE id = $1 AND id_prestador = $2',
@@ -93,8 +93,8 @@ router.post('/', exigirTipo('cliente'), rota(async (req, res) => {
   const idP = inteiro(idPrestador);
   const idS = inteiro(idServico);
   if (!idP || !idS) throw new ErroHttp(400, 'Informe prestador e serviço.');
-  if (!dataValida(data)) throw new ErroHttp(400, 'Data inválida. Use o formato AAAA-MM-DD.');
-  if (!horaValida(hora)) throw new ErroHttp(400, 'Horário inválido. Use o formato HH:MM.');
+  if (!dataValida(data)) throw new ErroHttp(400, 'Data inválida. Use o formato AAAA-MM-DD.', 'data');
+  if (!horaValida(hora)) throw new ErroHttp(400, 'Horário inválido. Use o formato HH:MM.', 'hora');
 
   const id = await db.transacao(async (cx) => {
     // Um agendamento por vez por prestador: evita dois clientes pegando o mesmo horário.
@@ -110,7 +110,7 @@ router.post('/', exigirTipo('cliente'), rota(async (req, res) => {
     if (!servico) throw new ErroHttp(404, 'Serviço não encontrado para este prestador.');
 
     const livres = await horariosLivres(cx, { idPrestador: idP, duracaoMin: servico.duracaoMin, data });
-    if (!livres.includes(hora)) throw new ErroHttp(409, 'Este horário não está mais disponível. Escolha outro.');
+    if (!livres.includes(hora)) throw new ErroHttp(409, 'Este horário não está mais disponível. Escolha outro.', 'hora');
 
     const ins = await cx.query(
       `INSERT INTO agendamentos (id_cliente, id_prestador, id_servico, servico_nome, preco, duracao_min, data, hora)
@@ -154,8 +154,8 @@ router.put('/:id/remarcar', exigirTipo('cliente'), rota(async (req, res) => {
   const id = inteiro(req.params.id);
   const { data, hora } = req.body || {};
   if (!id) throw new ErroHttp(400, 'Agendamento inválido.');
-  if (!dataValida(data)) throw new ErroHttp(400, 'Data inválida. Use o formato AAAA-MM-DD.');
-  if (!horaValida(hora)) throw new ErroHttp(400, 'Horário inválido. Use o formato HH:MM.');
+  if (!dataValida(data)) throw new ErroHttp(400, 'Data inválida. Use o formato AAAA-MM-DD.', 'data');
+  if (!horaValida(hora)) throw new ErroHttp(400, 'Horário inválido. Use o formato HH:MM.', 'hora');
 
   await db.transacao(async (cx) => {
     const a = await carregarAgendamento(cx, id, req.usuario.id, 'AND a.id_cliente = $2');
@@ -167,7 +167,7 @@ router.put('/:id/remarcar', exigirTipo('cliente'), rota(async (req, res) => {
     const livres = await horariosLivres(cx, {
       idPrestador: a.id_prestador, duracaoMin: a.duracao_min, data, ignorarId: id,
     });
-    if (!livres.includes(hora)) throw new ErroHttp(409, 'Este horário não está disponível. Escolha outro.');
+    if (!livres.includes(hora)) throw new ErroHttp(409, 'Este horário não está disponível. Escolha outro.', 'hora');
 
     await cx.query('UPDATE agendamentos SET data = $1, hora = $2 WHERE id = $3', [data, hora, id]);
 
