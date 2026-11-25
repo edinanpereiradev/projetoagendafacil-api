@@ -5,19 +5,10 @@ const jwt = require('jsonwebtoken');
 const db = require('../db');
 const config = require('../config');
 const { ErroHttp, rota } = require('../erros');
+const { usuarioPublico } = require('../usuario');
 
 const router = express.Router();
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-const usuarioPublico = (u) => ({
-  id: u.id,
-  nome: u.nome,
-  email: u.email,
-  tipo: u.tipo,
-  telefone: u.telefone,
-  nomeNegocio: u.nome_negocio,
-  especialidade: u.especialidade,
-});
 
 const gerarToken = (u) => jwt.sign({ id: u.id, tipo: u.tipo, nome: u.nome }, config.jwtSecret, { expiresIn: '8h' });
 
@@ -28,12 +19,12 @@ router.post('/registrar', rota(async (req, res) => {
   const tel = String(telefone || '').trim();
   const negocio = String(nomeNegocio || '').trim();
 
-  if (!nomeLimpo) throw new ErroHttp(400, 'Informe o nome.');
-  if (!EMAIL.test(emailLimpo)) throw new ErroHttp(400, 'Informe um e-mail válido.');
-  if (String(senha || '').length < 6) throw new ErroHttp(400, 'A senha deve ter pelo menos 6 caracteres.');
-  if (!['cliente', 'prestador'].includes(tipo)) throw new ErroHttp(400, 'Tipo de conta inválido.');
-  if (tipo === 'cliente' && !tel) throw new ErroHttp(400, 'Informe o telefone.');
-  if (tipo === 'prestador' && !negocio) throw new ErroHttp(400, 'Informe o nome do negócio.');
+  if (!nomeLimpo) throw new ErroHttp(400, 'Informe o nome.', 'nome');
+  if (!EMAIL.test(emailLimpo)) throw new ErroHttp(400, 'Informe um e-mail válido.', 'email');
+  if (String(senha || '').length < 6) throw new ErroHttp(400, 'A senha deve ter pelo menos 6 caracteres.', 'senha');
+  if (!['cliente', 'prestador'].includes(tipo)) throw new ErroHttp(400, 'Tipo de conta inválido.', 'tipo');
+  if (tipo === 'cliente' && !tel) throw new ErroHttp(400, 'Informe o telefone.', 'telefone');
+  if (tipo === 'prestador' && !negocio) throw new ErroHttp(400, 'Informe o nome do negócio.', 'nomeNegocio');
 
   const hash = await bcrypt.hash(String(senha), 10);
   try {
@@ -44,7 +35,7 @@ router.post('/registrar', rota(async (req, res) => {
     );
     res.status(201).json({ token: gerarToken(rows[0]), usuario: usuarioPublico(rows[0]) });
   } catch (erro) {
-    if (erro.code === '23505') throw new ErroHttp(409, 'Este e-mail já está cadastrado.');
+    if (erro.code === '23505') throw new ErroHttp(409, 'Este e-mail já está cadastrado.', 'email');
     throw erro;
   }
 }));
