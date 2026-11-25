@@ -1,0 +1,2059 @@
+{
+  "info": {
+    "name": "AgendaFácil API - testes dos endpoints",
+    "description": "Roda em ordem (Collection Runner). Cria usuários novos a cada execução. Veja o README da API.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "0 - Saúde e CORS",
+      "item": [
+        {
+          "name": "Health check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('status ok', () => pm.expect(pm.response.json().status).to.eql('ok'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/saude",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "saude"
+              ]
+            }
+          }
+        },
+        {
+          "name": "CORS: preflight de uma origem permitida",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Preflight responde 204 (ou 200)', () => pm.expect([200, 204]).to.include(pm.response.code));",
+                  "pm.test('Libera a origem do front-end', () => pm.expect(pm.response.headers.get('Access-Control-Allow-Origin')).to.eql(pm.collectionVariables.get('origemFront')));",
+                  "pm.test('Libera os cabeçalhos Content-Type e Authorization', () => {",
+                  "  const h = (pm.response.headers.get('Access-Control-Allow-Headers') || '').toLowerCase();",
+                  "  pm.expect(h).to.include('content-type');",
+                  "  pm.expect(h).to.include('authorization');",
+                  "});",
+                  "pm.test('Libera os métodos usados pela UI', () => {",
+                  "  const m = pm.response.headers.get('Access-Control-Allow-Methods') || '';",
+                  "  ['GET', 'POST', 'PUT', 'DELETE'].forEach((x) => pm.expect(m).to.include(x));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "OPTIONS",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{origemFront}}"
+              },
+              {
+                "key": "Access-Control-Request-Method",
+                "value": "POST"
+              },
+              {
+                "key": "Access-Control-Request-Headers",
+                "value": "content-type,authorization"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "CORS: origem NÃO permitida (só com CORS_ORIGIN definido)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Defina a variável corsRestrito = true quando a API estiver com CORS_ORIGIN preenchido.",
+                  "if (pm.collectionVariables.get('corsRestrito') === 'true') {",
+                  "  pm.test('Não libera uma origem desconhecida', () => pm.expect(pm.response.headers.has('Access-Control-Allow-Origin')).to.be.false);",
+                  "} else {",
+                  "  pm.test('CORS aberto (desenvolvimento): teste ignorado', () => pm.expect(true).to.be.true);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "OPTIONS",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "http://site-desconhecido.example"
+              },
+              {
+                "key": "Access-Control-Request-Method",
+                "value": "POST"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "1 - Autenticação (BCrypt e resposta sem senha)",
+      "item": [
+        {
+          "name": "Registrar prestador (201)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('emailPrestador', `prestador.${Date.now()}@teste.com`);",
+                  "pm.collectionVariables.set('emailCliente', `cliente.${Date.now()}@teste.com`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test('Devolve token e usuário', () => { pm.expect(j.token).to.be.a('string').and.not.empty; pm.expect(j.usuario.tipo).to.eql('prestador'); });",
+                  "pm.collectionVariables.set('tokenPrestador', j.token);",
+                  "pm.collectionVariables.set('idPrestador', j.usuario.id);",
+                  "pm.test('A resposta não expõe senha nem hash', () => {",
+                  "  const texto = pm.response.text();",
+                  "  pm.expect(texto).to.not.match(/senha/i);",
+                  "  pm.expect(texto).to.not.include('$2a$');",
+                  "  pm.expect(texto).to.not.include('$2b$');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/registrar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "registrar"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Prestador Postman\",\n  \"email\": \"{{emailPrestador}}\",\n  \"senha\": \"{{senha}}\",\n  \"tipo\": \"prestador\",\n  \"nomeNegocio\": \"Studio Postman\",\n  \"especialidade\": \"Testes\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Registrar com e-mail repetido (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Erro no formato padrão { erro }', () => {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j.erro).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Campo destacado: email', () => pm.expect(pm.response.json().campo).to.eql('email'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/registrar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "registrar"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Outro\",\n  \"email\": \"{{emailPrestador}}\",\n  \"senha\": \"{{senha}}\",\n  \"tipo\": \"prestador\",\n  \"nomeNegocio\": \"X\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Registrar com senha curta (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Erro no formato padrão { erro }', () => {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j.erro).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Campo destacado: senha', () => pm.expect(pm.response.json().campo).to.eql('senha'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/registrar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "registrar"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Teste\",\n  \"email\": \"curta@teste.com\",\n  \"senha\": \"123\",\n  \"tipo\": \"cliente\",\n  \"telefone\": \"(86) 90000-0000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Registrar com JSON inválido (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Erro no formato padrão { erro }', () => {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j.erro).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/registrar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "registrar"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"nome\": \"sem fechar",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Registrar cliente (201)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test('Devolve token e usuário cliente', () => { pm.expect(j.token).to.be.a('string').and.not.empty; pm.expect(j.usuario.tipo).to.eql('cliente'); });",
+                  "pm.collectionVariables.set('tokenCliente', j.token);",
+                  "pm.test('A resposta não expõe senha nem hash', () => {",
+                  "  const texto = pm.response.text();",
+                  "  pm.expect(texto).to.not.match(/senha/i);",
+                  "  pm.expect(texto).to.not.include('$2a$');",
+                  "  pm.expect(texto).to.not.include('$2b$');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/registrar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "registrar"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Cliente Postman\",\n  \"email\": \"{{emailCliente}}\",\n  \"senha\": \"{{senha}}\",\n  \"tipo\": \"cliente\",\n  \"telefone\": \"(86) 99999-0000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Login válido (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Devolve token', () => pm.expect(pm.response.json().token).to.be.a('string').and.not.empty);",
+                  "pm.test('A resposta não expõe senha nem hash', () => {",
+                  "  const texto = pm.response.text();",
+                  "  pm.expect(texto).to.not.match(/senha/i);",
+                  "  pm.expect(texto).to.not.include('$2a$');",
+                  "  pm.expect(texto).to.not.include('$2b$');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{emailCliente}}\",\n  \"senha\": \"{{senha}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Login com senha errada (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Erro no formato padrão { erro }', () => {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j.erro).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{emailCliente}}\",\n  \"senha\": \"senha-errada\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Rota protegida sem token (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Erro no formato padrão { erro }', () => {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j.erro).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/agendamentos/meus",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "agendamentos",
+                "meus"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Rota protegida com token inválido (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Erro no formato padrão { erro }', () => {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j.erro).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer token.invalido.aqui"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/agendamentos/meus",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "agendamentos",
+                "meus"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2 - Disponibilidade (US04)",
+      "item": [
+        {
+          "name": "Cadastrar horário (201)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Dia seguinte + 1: evita \"hoje\", quando horários já passaram não aparecem",
+                  "const d = new Date(); d.setUTCDate(d.getUTCDate() + 2);",
+                  "pm.collectionVariables.set('dataAgendamento', d.toISOString().slice(0, 10));",
+                  "pm.collectionVariables.set('diaSemana', d.getUTCDay());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('idDisponibilidade', pm.response.json().id);",
+                  "pm.test('Horário salvo', () => pm.expect(pm.response.json().horaInicio).to.eql('09:00'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenPrestador}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/disponibilidade",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "disponibilidade"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"diaSemana\": \"{{diaSemana}}\",\n  \"horaInicio\": \"09:00\",\n  \"horaFim\": \"12:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Início depois do fim (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Erro no formato padrão { erro }', () => {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j.erro).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Campo destacado: horaFim', () => pm.expect(pm.response.json().campo).to.eql('horaFim'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenPrestador}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/disponibilidade",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "disponibilidade"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"diaSemana\": 1,\n  \"horaInicio\": \"12:00\",\n  \"horaFim\": \"09:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Horário sobreposto (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Erro no formato padrão { erro }', () => {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j.erro).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Campo destacado: horaInicio', () => pm.expect(pm.response.json().campo).to.eql('horaInicio'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenPrestador}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/disponibilidade",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "disponibilidade"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"diaSemana\": \"{{diaSemana}}\",\n  \"horaInicio\": \"10:00\",\n  \"horaFim\": \"11:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Cliente não pode cadastrar horário (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));",
+                  "pm.test('Erro no formato padrão { erro }', () => {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j.erro).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCliente}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/disponibilidade",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "disponibilidade"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"diaSemana\": 1,\n  \"horaInicio\": \"14:00\",\n  \"horaFim\": \"15:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Listar horários do prestador (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Lista com o horário criado', () => pm.expect(pm.response.json()).to.be.an('array').that.is.not.empty);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCliente}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/disponibilidade/{{idPrestador}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "disponibilidade",
+                "{{idPrestador}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3 - Serviços e prestadores (US05)",
+      "item": [
+        {
+          "name": "Cadastrar serviço (201)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test('Preço e duração numéricos', () => { pm.expect(j.preco).to.be.a('number'); pm.expect(j.duracaoMin).to.eql(60); });",
+                  "pm.collectionVariables.set('idServico', j.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenPrestador}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/servicos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "servicos"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Corte Postman\",\n  \"preco\": 50,\n  \"duracaoMin\": 60\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Duração inválida (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Erro no formato padrão { erro }', () => {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j.erro).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Campo destacado: duracaoMin', () => pm.expect(pm.response.json().campo).to.eql('duracaoMin'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenPrestador}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/servicos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "servicos"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Rápido demais\",\n  \"preco\": 10,\n  \"duracaoMin\": 3\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Cliente não pode cadastrar serviço (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));",
+                  "pm.test('Erro no formato padrão { erro }', () => {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j.erro).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCliente}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/servicos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "servicos"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"X\",\n  \"preco\": 10,\n  \"duracaoMin\": 30\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Listar prestadores (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Inclui o prestador criado', () => pm.expect(pm.response.json().some((p) => p.id == pm.collectionVariables.get('idPrestador'))).to.be.true);",
+                  "pm.test('A resposta não expõe senha nem hash', () => {",
+                  "  const texto = pm.response.text();",
+                  "  pm.expect(texto).to.not.match(/senha/i);",
+                  "  pm.expect(texto).to.not.include('$2a$');",
+                  "  pm.expect(texto).to.not.include('$2b$');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCliente}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/prestadores",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "prestadores"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Listar serviços do prestador (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Inclui o serviço criado', () => pm.expect(pm.response.json().some((s) => s.id == pm.collectionVariables.get('idServico'))).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCliente}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/prestadores/{{idPrestador}}/servicos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "prestadores",
+                "{{idPrestador}}",
+                "servicos"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4 - Agendamentos (US06 a US09)",
+      "item": [
+        {
+          "name": "Horários disponíveis (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const slots = pm.response.json().slots;",
+                  "pm.test('Oferece 09:00, 10:00 e 11:00 (serviço de 60 min)', () => pm.expect(slots).to.eql(['09:00', '10:00', '11:00']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCliente}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/agendamentos/horarios-disponiveis?idPrestador={{idPrestador}}&idServico={{idServico}}&data={{dataAgendamento}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "agendamentos",
+                "horarios-disponiveis"
+              ],
+              "query": [
+                {
+                  "key": "idPrestador",
+                  "value": "{{idPrestador}}"
+                },
+                {
+                  "key": "idServico",
+                  "value": "{{idServico}}"
+                },
+                {
+                  "key": "data",
+                  "value": "{{dataAgendamento}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Data inválida nos horários (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Erro no formato padrão { erro }', () => {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j.erro).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Campo destacado: data', () => pm.expect(pm.response.json().campo).to.eql('data'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCliente}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/agendamentos/horarios-disponiveis?idPrestador={{idPrestador}}&idServico={{idServico}}&data=31-12-2026",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "agendamentos",
+                "horarios-disponiveis"
+              ],
+              "query": [
+                {
+                  "key": "idPrestador",
+                  "value": "{{idPrestador}}"
+                },
+                {
+                  "key": "idServico",
+                  "value": "{{idServico}}"
+                },
+                {
+                  "key": "data",
+                  "value": "31-12-2026"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Agendar (201)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('idAgendamento', pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCliente}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/agendamentos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "agendamentos"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idPrestador\": \"{{idPrestador}}\",\n  \"idServico\": \"{{idServico}}\",\n  \"data\": \"{{dataAgendamento}}\",\n  \"hora\": \"09:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Agendar o mesmo horário (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Erro no formato padrão { erro }', () => {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j.erro).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Campo destacado: hora', () => pm.expect(pm.response.json().campo).to.eql('hora'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCliente}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/agendamentos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "agendamentos"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idPrestador\": \"{{idPrestador}}\",\n  \"idServico\": \"{{idServico}}\",\n  \"data\": \"{{dataAgendamento}}\",\n  \"hora\": \"09:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Prestador não pode agendar (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));",
+                  "pm.test('Erro no formato padrão { erro }', () => {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j.erro).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenPrestador}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/agendamentos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "agendamentos"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idPrestador\": \"{{idPrestador}}\",\n  \"idServico\": \"{{idServico}}\",\n  \"data\": \"{{dataAgendamento}}\",\n  \"hora\": \"10:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Horário agendado sumiu da lista (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('09:00 não está mais livre', () => pm.expect(pm.response.json().slots).to.not.include('09:00'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCliente}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/agendamentos/horarios-disponiveis?idPrestador={{idPrestador}}&idServico={{idServico}}&data={{dataAgendamento}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "agendamentos",
+                "horarios-disponiveis"
+              ],
+              "query": [
+                {
+                  "key": "idPrestador",
+                  "value": "{{idPrestador}}"
+                },
+                {
+                  "key": "idServico",
+                  "value": "{{idServico}}"
+                },
+                {
+                  "key": "data",
+                  "value": "{{dataAgendamento}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Meus agendamentos - cliente (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const a = pm.response.json().find((x) => x.id == pm.collectionVariables.get('idAgendamento'));",
+                  "pm.test('Agendamento confirmado, com idPrestador e idServico', () => {",
+                  "  pm.expect(a).to.be.an('object');",
+                  "  pm.expect(a.status).to.eql('confirmado');",
+                  "  pm.expect(a.idPrestador).to.be.a('number');",
+                  "  pm.expect(a.idServico).to.be.a('number');",
+                  "  pm.expect(a.preco).to.be.a('number');",
+                  "});",
+                  "pm.test('A resposta não expõe senha nem hash', () => {",
+                  "  const texto = pm.response.text();",
+                  "  pm.expect(texto).to.not.match(/senha/i);",
+                  "  pm.expect(texto).to.not.include('$2a$');",
+                  "  pm.expect(texto).to.not.include('$2b$');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCliente}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/agendamentos/meus",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "agendamentos",
+                "meus"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Agenda - prestador (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Prestador vê o cliente do agendamento', () => pm.expect(pm.response.json().some((x) => x.clienteNome === 'Cliente Postman')).to.be.true);",
+                  "pm.test('A resposta não expõe senha nem hash', () => {",
+                  "  const texto = pm.response.text();",
+                  "  pm.expect(texto).to.not.match(/senha/i);",
+                  "  pm.expect(texto).to.not.include('$2a$');",
+                  "  pm.expect(texto).to.not.include('$2b$');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenPrestador}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/agendamentos/meus",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "agendamentos",
+                "meus"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Remarcar para 10:00 (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCliente}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/agendamentos/{{idAgendamento}}/remarcar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "agendamentos",
+                "{{idAgendamento}}",
+                "remarcar"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"data\": \"{{dataAgendamento}}\",\n  \"hora\": \"10:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Remarcar sem data (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Erro no formato padrão { erro }', () => {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j.erro).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Campo destacado: data', () => pm.expect(pm.response.json().campo).to.eql('data'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCliente}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/agendamentos/{{idAgendamento}}/remarcar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "agendamentos",
+                "{{idAgendamento}}",
+                "remarcar"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hora\": \"11:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Remarcar para o mesmo horário (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Erro no formato padrão { erro }', () => {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j.erro).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCliente}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/agendamentos/{{idAgendamento}}/remarcar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "agendamentos",
+                "{{idAgendamento}}",
+                "remarcar"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"data\": \"{{dataAgendamento}}\",\n  \"hora\": \"10:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Cliente não altera status (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));",
+                  "pm.test('Erro no formato padrão { erro }', () => {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j.erro).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCliente}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/agendamentos/{{idAgendamento}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "agendamentos",
+                "{{idAgendamento}}",
+                "status"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"concluido\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Status inválido (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Erro no formato padrão { erro }', () => {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j.erro).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenPrestador}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/agendamentos/{{idAgendamento}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "agendamentos",
+                "{{idAgendamento}}",
+                "status"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"qualquer\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Cancelar (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCliente}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/agendamentos/{{idAgendamento}}/cancelar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "agendamentos",
+                "{{idAgendamento}}",
+                "cancelar"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cancelar de novo (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Erro no formato padrão { erro }', () => {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j.erro).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCliente}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/agendamentos/{{idAgendamento}}/cancelar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "agendamentos",
+                "{{idAgendamento}}",
+                "cancelar"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Agendamento inexistente (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Erro no formato padrão { erro }', () => {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j.erro).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCliente}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/agendamentos/999999999/cancelar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "agendamentos",
+                "999999999",
+                "cancelar"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5 - Notificações e dashboard (US10 a US12)",
+      "item": [
+        {
+          "name": "Notificações do prestador (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const lista = pm.response.json();",
+                  "pm.test('Recebeu aviso de agendamento, remarcação e cancelamento', () => {",
+                  "  const textos = lista.map((n) => n.mensagem).join(' | ');",
+                  "  pm.expect(textos).to.include('Novo agendamento');",
+                  "  pm.expect(textos).to.include('remarcou');",
+                  "  pm.expect(textos).to.include('cancelou');",
+                  "});",
+                  "pm.test('Data no formato AAAA-MM-DD HH:MM:SS', () => pm.expect(lista[0].data).to.match(/^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}$/));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenPrestador}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/notificacoes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notificacoes"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Notificações do cliente (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Recebeu confirmação e remarcação', () => {",
+                  "  const textos = pm.response.json().map((n) => n.mensagem).join(' | ');",
+                  "  pm.expect(textos).to.include('Agendamento confirmado');",
+                  "  pm.expect(textos).to.include('Agendamento remarcado');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCliente}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/notificacoes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notificacoes"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Dashboard do prestador (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test('Indicadores numéricos', () => ['totalHoje', 'totalConfirmados', 'totalCancelados', 'totalConcluidos', 'totalNoShow', 'faturamentoPrevisto'].forEach((k) => pm.expect(d[k], k).to.be.a('number')));",
+                  "pm.test('Há pelo menos 1 cancelado', () => pm.expect(d.totalCancelados).to.be.at.least(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenPrestador}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/prestador",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard",
+                "prestador"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cliente não acessa o dashboard (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));",
+                  "pm.test('Erro no formato padrão { erro }', () => {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j.erro).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenCliente}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/prestador",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard",
+                "prestador"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6 - Limpeza",
+      "item": [
+        {
+          "name": "Remover serviço (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenPrestador}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/servicos/{{idServico}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "servicos",
+                "{{idServico}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Remover serviço de novo (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Erro no formato padrão { erro }', () => {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j.erro).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenPrestador}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/servicos/{{idServico}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "servicos",
+                "{{idServico}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Remover horário (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenPrestador}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/disponibilidade/{{idDisponibilidade}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "disponibilidade",
+                "{{idDisponibilidade}}"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api"
+    },
+    {
+      "key": "origemFront",
+      "value": "http://localhost:5500"
+    },
+    {
+      "key": "corsRestrito",
+      "value": "false"
+    },
+    {
+      "key": "senha",
+      "value": "123456"
+    }
+  ]
+}
